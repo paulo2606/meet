@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Meet.Api.Controllers;
 
-[Authorize]
 [ApiController]
 [Route("api/meetings")]
 public class MeetingsController(IMeetingService meetingService) : ControllerBase
 {
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create(CancellationToken cancellationToken)
     {

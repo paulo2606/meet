@@ -82,11 +82,29 @@ public class MeetingsControllerTests : IClassFixture<MeetApiFactory>
     }
 
     [Fact]
-    public async Task GetMeeting_SemAutenticacao_DeveRetornarUnauthorized()
+    public async Task GetMeeting_SemAutenticacao_DevePermitirConsultaPublica()
+    {
+        await RegisterAsync();
+        var created = await CreateMeetingAsync();
+
+        _client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await _client.GetAsync($"/api/meetings/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<MeetingResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(created.Code, body.Code);
+        Assert.Equal("Criador", body.HostName);
+    }
+
+    [Fact]
+    public async Task GetMeeting_Inexistente_SemAutenticacao_DeveRetornarNotFound()
     {
         var response = await _client.GetAsync($"/api/meetings/{Guid.NewGuid()}");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private async Task<MeetingResponse> CreateMeetingAsync()
