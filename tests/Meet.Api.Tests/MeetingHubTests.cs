@@ -124,6 +124,25 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         Assert.Equal("pa|Ana|ola pessoal", await brunoMessage.Task);
     }
 
+    [Fact]
+    public async Task ScreenShare_DeveSerNotificadoParaTodosDaReuniao()
+    {
+        var ana = await ConnectAsync("pa", "Ana");
+        var bruno = await ConnectAsync("pb", "Bruno");
+        await ana.InvokeAsync("Join", "m1", "pa", "Ana");
+        await bruno.InvokeAsync("Join", "m1", "pb", "Bruno");
+
+        var anaScreen = new TaskCompletionSource<string>();
+        ana.On<string, bool>("ScreenShare", (participantId, sharing) => anaScreen.TrySetResult($"{participantId}|{sharing}"));
+        var brunoScreen = new TaskCompletionSource<string>();
+        bruno.On<string, bool>("ScreenShare", (participantId, sharing) => brunoScreen.TrySetResult($"{participantId}|{sharing}"));
+
+        await ana.InvokeAsync("ScreenShare", "m1", true);
+
+        Assert.Equal("pa|True", await anaScreen.Task);
+        Assert.Equal("pa|True", await brunoScreen.Task);
+    }
+
     private async Task<HubConnection> ConnectAsync(string participantId, string name)
     {
         var connection = new HubConnectionBuilder()
@@ -141,6 +160,7 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         connection.On<string, string, string>("Answer", (_, _, _) => Task.CompletedTask);
         connection.On<string, string, string>("IceCandidate", (_, _, _) => Task.CompletedTask);
         connection.On<string, string, string>("Message", (_, _, _) => Task.CompletedTask);
+        connection.On<string, bool>("ScreenShare", (_, _) => Task.CompletedTask);
 
         await connection.StartAsync();
         _connections.Add(connection);
