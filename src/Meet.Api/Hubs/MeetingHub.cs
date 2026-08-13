@@ -39,6 +39,12 @@ public class MeetingHub : Hub
         return Clients.Group(meetingId).SendAsync("Message", participantId, name, text);
     }
 
+    public Task ScreenShare(string meetingId, bool sharing)
+    {
+        var participantId = ConnectionParticipants.GetValueOrDefault(Context.ConnectionId) ?? Context.ConnectionId;
+        return Clients.Group(meetingId).SendAsync("ScreenShare", participantId, sharing);
+    }
+
     public Task Offer(string meetingId, string targetParticipantId, string sdp)
     {
         return RelayAsync(targetParticipantId, "Offer", meetingId, Context.ConnectionId, sdp);
