@@ -7,6 +7,7 @@ public class MeetDbContext(DbContextOptions<MeetDbContext> options) : DbContext(
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Meeting> Meetings => Set<Meeting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +30,18 @@ public class MeetDbContext(DbContextOptions<MeetDbContext> options) : DbContext(
             entity.HasOne(token => token.User)
                 .WithMany()
                 .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Meeting>(entity =>
+        {
+            entity.ToTable("meetings");
+            entity.HasKey(meeting => meeting.Id);
+            entity.Property(meeting => meeting.Code).HasMaxLength(10).IsRequired();
+            entity.HasIndex(meeting => meeting.Code).IsUnique();
+            entity.HasOne(meeting => meeting.CreatedBy)
+                .WithMany()
+                .HasForeignKey(meeting => meeting.CreatedById)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
