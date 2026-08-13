@@ -1,6 +1,7 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using Meet.Api.Data;
+using Meet.Api.Hubs;
 using Meet.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
@@ -42,6 +43,7 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMeetingService, MeetingService>();
+builder.Services.AddSignalR();
 
 const string CorsPolicyName = "web";
 
@@ -82,6 +84,7 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/health");
 app.MapControllers();
+app.MapHub<MeetingHub>("/hubs/meeting");
 
 app.Run();
 
