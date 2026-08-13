@@ -1,3 +1,4 @@
+using Meet.Api.Hubs;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Xunit.Abstractions;
@@ -22,21 +23,21 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         var ana = await ConnectAsync("pa", "Ana");
         var bruno = await ConnectAsync("pb", "Bruno");
 
-        var anaPeers = new TaskCompletionSource<List<string>>();
-        ana.On<List<string>>("Peers", peers => anaPeers.TrySetResult(peers));
+        var anaPeers = new TaskCompletionSource<List<ParticipantInfo>>();
+        ana.On<List<ParticipantInfo>>("Peers", peers => anaPeers.TrySetResult(peers));
         await ana.InvokeAsync("Join", "m1", "pa", "Ana");
         var anaInitial = await anaPeers.Task;
         Assert.Empty(anaInitial);
 
-        var brunoPeers = new TaskCompletionSource<List<string>>();
-        bruno.On<List<string>>("Peers", peers => brunoPeers.TrySetResult(peers));
+        var brunoPeers = new TaskCompletionSource<List<ParticipantInfo>>();
+        bruno.On<List<ParticipantInfo>>("Peers", peers => brunoPeers.TrySetResult(peers));
         var anaNotified = new TaskCompletionSource<string>();
         ana.On<string, string>("PeerJoined", (participantId, name) => anaNotified.TrySetResult($"{participantId}|{name}"));
 
         await bruno.InvokeAsync("Join", "m1", "pb", "Bruno");
 
         var brunoPeersValue = await brunoPeers.Task;
-        Assert.Contains("pa", brunoPeersValue);
+        Assert.Contains(brunoPeersValue, peer => peer.ParticipantId == "pa" && peer.Name == "Ana");
         Assert.Equal("pb|Bruno", await anaNotified.Task);
     }
 
@@ -104,6 +105,25 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         Assert.Equal("pa", await left.Task);
     }
 
+    [Fact]
+    public async Task Mensagem_DeveSerEntregueParaTodosDaReuniao()
+    {
+        var ana = await ConnectAsync("pa", "Ana");
+        var bruno = await ConnectAsync("pb", "Bruno");
+        await ana.InvokeAsync("Join", "m1", "pa", "Ana");
+        await bruno.InvokeAsync("Join", "m1", "pb", "Bruno");
+
+        var anaMessage = new TaskCompletionSource<string>();
+        ana.On<string, string, string>("Message", (participantId, name, text) => anaMessage.TrySetResult($"{participantId}|{name}|{text}"));
+        var brunoMessage = new TaskCompletionSource<string>();
+        bruno.On<string, string, string>("Message", (participantId, name, text) => brunoMessage.TrySetResult($"{participantId}|{name}|{text}"));
+
+        await ana.InvokeAsync("SendMessage", "m1", "ola pessoal");
+
+        Assert.Equal("pa|Ana|ola pessoal", await anaMessage.Task);
+        Assert.Equal("pa|Ana|ola pessoal", await brunoMessage.Task);
+    }
+
     private async Task<HubConnection> ConnectAsync(string participantId, string name)
     {
         var connection = new HubConnectionBuilder()
@@ -114,12 +134,13 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
             })
             .Build();
 
-        connection.On<List<string>>("Peers", _ => Task.CompletedTask);
+        connection.On<List<ParticipantInfo>>("Peers", _ => Task.CompletedTask);
         connection.On<string, string>("PeerJoined", (_, _) => Task.CompletedTask);
         connection.On<string>("PeerLeft", _ => Task.CompletedTask);
         connection.On<string, string, string>("Offer", (_, _, _) => Task.CompletedTask);
         connection.On<string, string, string>("Answer", (_, _, _) => Task.CompletedTask);
         connection.On<string, string, string>("IceCandidate", (_, _, _) => Task.CompletedTask);
+        connection.On<string, string, string>("Message", (_, _, _) => Task.CompletedTask);
 
         await connection.StartAsync();
         _connections.Add(connection);
