@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Meet.Api.Hubs;
 
+public record ParticipantInfo(string ParticipantId, string Name);
+
 public class MeetingHub : Hub
 {
     private static readonly ConcurrentDictionary<string, string> ParticipantConnections = new();
@@ -20,8 +22,21 @@ public class MeetingHub : Hub
         var participants = MeetingParticipants.GetOrAdd(meetingId, _ => new ConcurrentDictionary<string, string>());
         participants.TryAdd(participantId, name);
 
-        await Clients.Caller.SendAsync("Peers", participants.Keys.Where(other => other != participantId).ToList());
+        var peers = participants
+            .Where(pair => pair.Key != participantId)
+            .Select(pair => new ParticipantInfo(pair.Key, pair.Value))
+            .ToList();
+        await Clients.Caller.SendAsync("Peers", peers);
         await Clients.OthersInGroup(meetingId).SendAsync("PeerJoined", participantId, name);
+    }
+
+    public Task SendMessage(string meetingId, string text)
+    {
+        var participantId = ConnectionParticipants.GetValueOrDefault(Context.ConnectionId) ?? Context.ConnectionId;
+        var name = MeetingParticipants
+            .GetValueOrDefault(meetingId)?
+            .GetValueOrDefault(participantId) ?? participantId;
+        return Clients.Group(meetingId).SendAsync("Message", participantId, name, text);
     }
 
     public Task Offer(string meetingId, string targetParticipantId, string sdp)
