@@ -89,6 +89,7 @@ public class AuthorizationTests : IClassFixture<MeetApiFactory>
         Assert.Equal(token.UserId, body.UserId);
         Assert.Equal("Autorizado", body.Name);
         Assert.False(string.IsNullOrWhiteSpace(body.Email));
+        Assert.Null(body.PhotoUrl);
     }
 
     private static string CreateToken(SymmetricSecurityKey key, DateTime notBefore, DateTime expires)
@@ -115,4 +116,5 @@ public class MeResponse
     public Guid UserId { get; set; }
     public required string Name { get; set; }
     public required string Email { get; set; }
+    public string? PhotoUrl { get; set; }
 }
