@@ -72,6 +72,10 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(Path.Combine(webRoot, "avatars"));
+Directory.CreateDirectory(Path.Combine(webRoot, "uploads"));
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -79,6 +83,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseRateLimiter();
 app.UseCors(CorsPolicyName);
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 

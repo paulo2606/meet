@@ -105,6 +105,7 @@ public class AuthService(
                 UserId = user.Id,
                 Name = user.Name,
                 Email = user.Email,
+                PhotoUrl = user.PhotoUrl,
             },
             refreshToken);
     }

@@ -3,31 +3,39 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Meet.Api.Hubs;
 
-public record ParticipantInfo(string ParticipantId, string Name);
+public record ParticipantInfo(string ParticipantId, string Name, string? PhotoUrl);
 
 public class MeetingHub : Hub
 {
     private static readonly ConcurrentDictionary<string, string> ParticipantConnections = new();
     private static readonly ConcurrentDictionary<string, string> ConnectionParticipants = new();
     private static readonly ConcurrentDictionary<string, string> ConnectionMeetings = new();
-    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> MeetingParticipants = new();
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ParticipantState>> MeetingParticipants = new();
 
-    public async Task Join(string meetingId, string participantId, string name)
+    private sealed record ParticipantState(string Name, string? PhotoUrl);
+
+    public async Task Join(string meetingId, string participantId, string name, string? photoUrl)
     {
         ParticipantConnections[participantId] = Context.ConnectionId;
         ConnectionParticipants[Context.ConnectionId] = participantId;
         ConnectionMeetings[Context.ConnectionId] = meetingId;
         await Groups.AddToGroupAsync(Context.ConnectionId, meetingId);
 
-        var participants = MeetingParticipants.GetOrAdd(meetingId, _ => new ConcurrentDictionary<string, string>());
-        participants.TryAdd(participantId, name);
+        var participants = MeetingParticipants.GetOrAdd(meetingId, _ => new ConcurrentDictionary<string, ParticipantState>());
+        participants.TryAdd(participantId, new ParticipantState(name, photoUrl));
 
         var peers = participants
             .Where(pair => pair.Key != participantId)
-            .Select(pair => new ParticipantInfo(pair.Key, pair.Value))
+            .Select(pair => new ParticipantInfo(pair.Key, pair.Value.Name, pair.Value.PhotoUrl))
             .ToList();
         await Clients.Caller.SendAsync("Peers", peers);
-        await Clients.OthersInGroup(meetingId).SendAsync("PeerJoined", participantId, name);
+        await Clients.OthersInGroup(meetingId).SendAsync("PeerJoined", participantId, name, photoUrl);
+    }
+
+    public Task CameraState(string meetingId, bool on)
+    {
+        var participantId = ConnectionParticipants.GetValueOrDefault(Context.ConnectionId) ?? Context.ConnectionId;
+        return Clients.Group(meetingId).SendAsync("CameraState", participantId, on);
     }
 
     public Task SendMessage(string meetingId, string text)
@@ -35,7 +43,8 @@ public class MeetingHub : Hub
         var participantId = ConnectionParticipants.GetValueOrDefault(Context.ConnectionId) ?? Context.ConnectionId;
         var name = MeetingParticipants
             .GetValueOrDefault(meetingId)?
-            .GetValueOrDefault(participantId) ?? participantId;
+            .GetValueOrDefault(participantId)?
+            .Name ?? participantId;
         return Clients.Group(meetingId).SendAsync("Message", participantId, name, text);
     }
 

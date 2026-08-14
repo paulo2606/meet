@@ -7,6 +7,7 @@ public class TokenResponse
     public Guid UserId { get; set; }
     public required string Name { get; set; }
     public required string Email { get; set; }
+    public string? PhotoUrl { get; set; }
 }
 
 public record AuthResult(TokenResponse Token, string RefreshToken);
