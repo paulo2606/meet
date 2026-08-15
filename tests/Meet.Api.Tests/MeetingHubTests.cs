@@ -1,6 +1,11 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using Meet.Api.Hubs;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.IdentityModel.Tokens;
 using Xunit.Abstractions;
 
 namespace Meet.Api.Tests;
@@ -162,13 +167,57 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         Assert.Equal("pa|True", await brunoScreen.Task);
     }
 
-    private async Task<HubConnection> ConnectAsync(string participantId, string name)
+    [Fact]
+    public async Task SemToken_DeveFalharAoConectarNoHub()
     {
         var connection = new HubConnectionBuilder()
             .WithUrl("http://localhost/hubs/meeting", options =>
             {
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
                 options.Transports = HttpTransportType.LongPolling;
+            })
+            .Build();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.StartAsync());
+        await connection.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ComTokenDeConvidado_DeveConectarNoHub()
+    {
+        var token = await RequestGuestTokenAsync();
+        var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/meeting", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+                options.AccessTokenProvider = () => Task.FromResult<string?>(token);
+            })
+            .Build();
+        _connections.Add(connection);
+
+        await connection.StartAsync();
+    }
+
+    private async Task<string> RequestGuestTokenAsync()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync("/api/auth/guest-token", null);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<Meet.Api.DTOs.Auth.GuestTokenResponse>();
+        Assert.NotNull(body);
+        return body.AccessToken;
+    }
+
+    private async Task<HubConnection> ConnectAsync(string participantId, string name)
+    {
+        var token = CreateValidToken();
+        var connection = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/meeting", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+                options.AccessTokenProvider = () => Task.FromResult<string?>(token);
             })
             .Build();
 
@@ -185,6 +234,20 @@ public class MeetingHubTests : IClassFixture<MeetApiFactory>, IDisposable
         await connection.StartAsync();
         _connections.Add(connection);
         return connection;
+    }
+
+    private static string CreateValidToken()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(MeetApiFactory.TestJwtKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer: "meet-api",
+            audience: "meet-web",
+            claims: [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString())],
+            notBefore: DateTime.UtcNow.AddMinutes(-5),
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     public void Dispose()

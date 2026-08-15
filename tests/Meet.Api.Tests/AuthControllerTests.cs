@@ -164,6 +164,18 @@ public class AuthControllerTests : IClassFixture<MeetApiFactory>
         Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
     }
 
+    [Fact]
+    public async Task GuestToken_DeveRetornarTokenDeConvidado()
+    {
+        var response = await _client.PostAsync("/api/auth/guest-token", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<GuestTokenResponse>();
+        Assert.NotNull(body);
+        Assert.False(string.IsNullOrWhiteSpace(body.AccessToken));
+    }
+
     private static StringContent Json(object value)
     {
         return new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
