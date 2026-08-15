@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Meet.Api.Hubs;
 
 public record ParticipantInfo(string ParticipantId, string Name, string? PhotoUrl);
 
+[Authorize]
 public class MeetingHub : Hub
 {
     private static readonly ConcurrentDictionary<string, string> ParticipantConnections = new();

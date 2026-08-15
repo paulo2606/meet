@@ -11,6 +11,7 @@ namespace Meet.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(
     IAuthService authService,
+    ITokenService tokenService,
     IOptions<TokenOptions> tokenOptions) : ControllerBase
 {
     private const string RefreshTokenCookieName = "meet_refresh";
@@ -75,8 +76,7 @@ public class AuthController(
     public async Task<IActionResult> Logout(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshTokenRequest? request,
         CancellationToken cancellationToken)
-    {
-        var refreshToken = request?.RefreshToken;
+    {        var refreshToken = request?.RefreshToken;
         if (string.IsNullOrEmpty(refreshToken))
         {
             refreshToken = Request.Cookies[RefreshTokenCookieName];
@@ -89,6 +89,12 @@ public class AuthController(
 
         RemoveRefreshTokenCookie();
         return NoContent();
+    }
+
+    [HttpPost("guest-token")]
+    public IActionResult GuestToken()
+    {
+        return Ok(new GuestTokenResponse { AccessToken = tokenService.CreateGuestToken() });
     }
 
     private void SetRefreshTokenCookie(string refreshToken)

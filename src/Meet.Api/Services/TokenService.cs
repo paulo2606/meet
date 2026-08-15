@@ -11,6 +11,7 @@ namespace Meet.Api.Services;
 public interface ITokenService
 {
     string CreateAccessToken(User user);
+    string CreateGuestToken();
     string CreateRefreshToken();
     string HashRefreshToken(string token);
 }
@@ -26,6 +27,28 @@ public class TokenService(IOptions<TokenOptions> options) : ITokenService
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(JwtRegisteredClaimNames.Name, user.Name),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: options.Value.Issuer,
+            audience: options.Value.Audience,
+            claims: claims,
+            notBefore: DateTime.UtcNow,
+            expires: DateTime.UtcNow.AddMinutes(options.Value.AccessTokenMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public string CreateGuestToken()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Value.Key));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, $"guest-{Guid.NewGuid():N}"),
+            new Claim("guest", "true"),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
