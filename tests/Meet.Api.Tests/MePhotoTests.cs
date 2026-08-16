@@ -5,8 +5,6 @@ using System.Text;
 using System.Text.Json;
 using Meet.Api.DTOs.Auth;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Meet.Api.Tests;
 
@@ -78,11 +76,36 @@ public class MePhotoTests : IClassFixture<MeetApiFactory>
 
         var body = await response.Content.ReadFromJsonAsync<PhotoResponse>();
         Assert.NotNull(body);
-        Assert.NotNull(body.PhotoUrl);
-        Assert.StartsWith("/uploads/", body.PhotoUrl, StringComparison.Ordinal);
-        Assert.EndsWith(".png", body.PhotoUrl, StringComparison.Ordinal);
+        Assert.Matches(@"^/uploads/[0-9a-fA-F-]{36}$", body.PhotoUrl);
 
-        DeleteUploadedFile(body.PhotoUrl);
+        var imageResponse = await _client.GetAsync(body.PhotoUrl);
+        Assert.Equal(HttpStatusCode.OK, imageResponse.StatusCode);
+        Assert.Equal("image/png", imageResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(TinyPng, await imageResponse.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task GetUploadedPhoto_ComIdInexistente_DeveRetornarNotFound()
+    {
+        var response = await _client.GetAsync($"/uploads/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UploadPhoto_EntaoGetPublico_SemToken_DeveRetornarImagem()
+    {
+        var token = await RegisterAsync("Upload Publico");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        var upload = await _client.PostAsync("/api/me/photo/upload", Multipart("foto.png", "image/png", TinyPng));
+        var body = await upload.Content.ReadFromJsonAsync<PhotoResponse>();
+        Assert.NotNull(body?.PhotoUrl);
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var response = await _client.GetAsync(body.PhotoUrl);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(TinyPng, await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -137,17 +160,6 @@ public class MePhotoTests : IClassFixture<MeetApiFactory>
         var token = await response.Content.ReadFromJsonAsync<TokenResponse>();
         Assert.NotNull(token);
         return token;
-    }
-
-    private void DeleteUploadedFile(string photoUrl)
-    {
-        var environment = _factory.Services.GetRequiredService<IHostEnvironment>();
-        var relative = photoUrl.TrimStart('/');
-        var path = Path.Combine(environment.ContentRootPath, "wwwroot", relative.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(path))
-        {
-            File.Delete(path);
-        }
     }
 
     private static MultipartFormDataContent Multipart(string fileName, string contentType, byte[] content)
