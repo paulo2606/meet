@@ -60,11 +60,14 @@ builder.Services.AddSignalR();
 
 const string CorsPolicyName = "web";
 
+var allowedOrigins = (builder.Configuration.GetValue<string>("Cors:AllowedOrigins") ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(CorsPolicyName, policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
             .AllowCredentials()
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -84,6 +87,12 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<MeetDbContext>();
+    db.Database.Migrate();
+}
 
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(Path.Combine(webRoot, "avatars"));
