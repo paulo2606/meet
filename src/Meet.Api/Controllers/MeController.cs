@@ -1,5 +1,6 @@
 using Meet.Api.Data;
 using Meet.Api.DTOs.Me;
+using Meet.Api.Entities;
 using Meet.Api.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,8 +13,7 @@ namespace Meet.Api.Controllers;
 [Route("api")]
 public class MeController(
     MeetDbContext db,
-    IConfiguration configuration,
-    IWebHostEnvironment environment) : ControllerBase
+    IConfiguration configuration) : ControllerBase
 {
     private const int DefaultMaxPhotoBytes = 5 * 1024 * 1024;
     private static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
@@ -76,14 +76,17 @@ public class MeController(
             return BadRequest(new { message = "arquivo corrompido ou tipo invalido" });
         }
 
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var uploadsRoot = Path.Combine(webRoot, "uploads", user.Id.ToString());
-        Directory.CreateDirectory(uploadsRoot);
+        var photo = new UserPhoto
+        {
+            Id = Guid.NewGuid(),
+            Bytes = bytes,
+            ContentType = expectedContentType,
+            UserId = user.Id,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        db.UserPhotos.Add(photo);
 
-        var fileName = $"{Guid.NewGuid():N}{extension}";
-        await System.IO.File.WriteAllBytesAsync(Path.Combine(uploadsRoot, fileName), bytes, cancellationToken);
-
-        user.PhotoUrl = $"/uploads/{user.Id}/{fileName}";
+        user.PhotoUrl = $"/uploads/{photo.Id}";
         await db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { user.PhotoUrl });
